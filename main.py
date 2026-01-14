@@ -1,7 +1,12 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
+import requests
+import json
 import sys
 import pickle
 import os
+GITHUB_TOKEN =os.getenv("STUDY_ASSIST_TOKEN")
+GIST_ID = "d3d4d5e4e2293d4b528dac886951c6ac"
+FILENAME = "study-incentive-assistant"
 from datetime import datetime, timedelta
 from PySide6.QtWidgets import (QApplication, QMainWindow, QTabWidget, 
                                QWidget, QVBoxLayout, QLabel, QPushButton, 
@@ -10,7 +15,7 @@ from PySide6.QtWidgets import (QApplication, QMainWindow, QTabWidget,
                                QMenu, QComboBox)
 from PySide6.QtCore import Qt, QTimer, QTime
 
-# 任务类支持序列化
+# 任务类
 class Task:
     def __init__(self, name, task_type, target_min, base_points, checkin_time=""):
         self.name = name
@@ -22,20 +27,86 @@ class Task:
         self.is_completed = False
 
 class LearningApp(QMainWindow):
+    def load_data_from_github(self):
+        """启动时从云端拉取所有数据"""
+        url = f"https://api.github.com/gists/{GIST_ID}"
+        headers = {"Authorization": f"token {GITHUB_TOKEN}"}
+        try:
+            response = requests.get(url, headers=headers)
+            if response.status_code == 200:
+                raw_content = response.json()['files'][FILENAME]['content']
+                data = json.loads(raw_content)
+                
+                # --- 同步所有变量 ---
+                self.total_points = data.get("points", 0)
+                self.time_bank = data.get("bank", {})
+                self.history_logs = data.get("logs", [])
+                
+                # 重建任务列表数据
+                self.tasks_data = []
+                for t in data.get("tasks", []):
+                    self.tasks_data.append(Task(
+                        t['name'], t['type'], t['target'], t['pts'], 
+                        t['checkin'], t['elapsed'], t['done']
+                    ))
+                print("✅ 联网读取成功！")
+            else:
+                print(f"❌ 联网失败，状态码: {response.status_code}")
+        except Exception as e:
+            print(f"📡 无法连接到 GitHub: {e}")
+
+    def save_data_to_github(self):
+        """当积分或任务改变时，同步到云端"""
+        url = f"https://api.github.com/gists/{GIST_ID}"
+        headers = {"Authorization": f"token {GITHUB_TOKEN}"}
+        
+        # 准备要上传的任务数据
+        current_tasks = []
+        for t in self.tasks_data:
+            current_tasks.append({
+                "name": t.name, "type": t.task_type, "target": t.target_min,
+                "pts": t.base_points, "checkin": t.checkin_time,
+                "elapsed": t.elapsed_seconds, "done": t.is_completed
+            })
+            
+        payload = {
+            "points": self.total_points,
+            "bank": self.time_bank,
+            "logs": self.history_logs,
+            "tasks": current_tasks
+        }
+        
+        content = json.dumps(payload, ensure_ascii=False)
+        data = {"files": {FILENAME: {"content": content}}}
+        
+        try:
+            res = requests.patch(url, headers=headers, json=data)
+            if res.status_code == 200:
+                print("🚀 数据已自动同步到云端 Gist")
+        except:
+            print("📡 同步失败，请检查网络")
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("学习积分助手 v1.5 - 自动存档版")
-        self.data_file = "learning_data.dat"
+        self.setWindowTitle("学习积分助手 v1.5.2 - 路径死锁版")
         
-        # 默认初始化数据
+        # --- 【核心修改：锁定路径】 ---
+        # 无论从哪里运行，都强制定位到当前脚本所在的真实目录
+        if getattr(sys, 'frozen', False):
+            base_path = os.path.dirname(sys.executable)
+        else:
+            base_path = os.path.dirname(os.path.abspath(__file__))
+        
+        # 存档文件现在永远跟随 .py 文件，不会跑到 C 盘
+        self.data_file = os.path.join(base_path, "learning_data.dat")
+        # ----------------------------
+
         self.total_points = 0
         self.time_bank = {} 
         self.history_logs = []
-        self.tasks_data = [] # 存储原始任务数据用于存档
+        self.tasks_data = [] 
         self.active_consume_type = None
 
-        # 尝试加载存档
-        self.load_data()
+        self.load_data() # 加载存档
 
         self.main_timer = QTimer()
         self.main_timer.timeout.connect(self.on_timer_tick)
@@ -44,10 +115,8 @@ class LearningApp(QMainWindow):
 
         self.init_ui()
 
-    # --- 存档功能 ---
     def save_data(self):
         try:
-            # 提取任务列表中的任务对象
             current_tasks = []
             for i in range(self.task_list.count()):
                 current_tasks.append(self.task_list.item(i).data(Qt.UserRole))
@@ -75,6 +144,7 @@ class LearningApp(QMainWindow):
             except Exception as e:
                 print(f"读取存档失败: {e}")
 
+    # 下面的 UI 代码和逻辑保持不变
     def init_ui(self):
         self.setGeometry(100, 100, 1150, 850)
         self.central_widget = QWidget()
@@ -93,7 +163,6 @@ class LearningApp(QMainWindow):
         self.create_reward_tab()
         self.create_stat_tab()
         
-        # 加载任务到列表
         for t in self.tasks_data:
             item = QListWidgetItem(f"[{t.task_type}] {t.name} ({t.base_points}分)")
             if t.is_completed: 
@@ -101,8 +170,6 @@ class LearningApp(QMainWindow):
                 item.setForeground(Qt.gray)
             item.setData(Qt.UserRole, t)
             self.task_list.addItem(item)
-        
-        # 更新银行显示
         self.update_all_ui()
 
     def create_task_tab(self):
@@ -187,11 +254,10 @@ class LearningApp(QMainWindow):
         log_layout.addLayout(v1); log_layout.addLayout(v2); layout.addLayout(log_layout)
         self.tab_widget.addTab(tab, "统计成果")
 
-    # --- 核心逻辑 (触发自动存档) ---
     def add_log(self, l_type, name, points, duration=0):
         log = {"time": datetime.now(), "type": l_type, "name": name, "points": points, "duration": duration}
         self.history_logs.append(log)
-        self.save_data() # 存档
+        self.save_data() 
         self.refresh_stats()
 
     def finish_task(self):
@@ -211,12 +277,14 @@ class LearningApp(QMainWindow):
             task.is_completed = True; item.setText(f"✅ {task.name} (+{earned})"); item.setForeground(Qt.gray)
         else: task.elapsed_seconds = 0; QMessageBox.information(self, "成功", f"获得 {earned} 积分！")
         self.update_all_ui(); self.save_data()
+        self.save_data_to_github()
 
     def add_task(self):
         name = self.t_name_in.text(); t_min = int(self.t_min_in.text() or 0); b_pts = int(self.t_pts_in.text() or 0)
         task = Task(name, ["一次性", "常规", "签到"][self.t_type_group.checkedId()], t_min, b_pts, self.checkin_in.text())
         item = QListWidgetItem(f"[{task.task_type}] {name} ({b_pts}分)"); item.setData(Qt.UserRole, task)
         self.task_list.addItem(item); self.t_name_in.clear(); self.save_data()
+        self.save_data_to_github()
 
     def buy_store_item(self, item):
         d = item.data(Qt.UserRole)
@@ -230,7 +298,6 @@ class LearningApp(QMainWindow):
             self.total_points -= d["pts"]; self.history_list.addItem(f"领用: {d['name']}")
             self.add_log("支出", f"领用奖励: {d['name']}", -d['pts']); self.update_all_ui(); self.save_data()
 
-    # --- 辅助逻辑 ---
     def refresh_stats(self):
         self.log_tasks.clear(); self.log_points.clear()
         ty, tm = int(self.year_combo.currentText()), self.month_combo.currentData()
@@ -265,7 +332,7 @@ class LearningApp(QMainWindow):
             self.time_bank[cat] -= 1; m, s = divmod(self.time_bank[cat], 60)
             self.label_s_status.setText(f"消费【{cat}】中: 剩 {m:02d}:{s:02d}"); self.update_all_ui()
         else: self.total_points -= 1; self.update_all_ui(); self.label_s_status.setText("⚠️ 余额空！倒扣积分中！")
-        if self.time_bank[cat] % 60 == 0: self.save_data() # 每分钟存一次档
+        if self.time_bank[cat] % 60 == 0: self.save_data() 
 
     def stop_consuming(self): self.store_timer.stop(); self.active_consume_type = None; self.label_s_status.setText("状态: 闲置"); self.save_data()
 
