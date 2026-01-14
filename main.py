@@ -57,10 +57,15 @@ class LearningApp(QMainWindow):
 
     def save_data_to_github(self):
         """当积分或任务改变时，同步到云端"""
+        # 如果 GITHUB_TOKEN 为空，直接返回，防止报错
+        if not GITHUB_TOKEN:
+            print("⚠️ 未检测到 Token，跳过云端同步")
+            return
+
         url = f"https://api.github.com/gists/{GIST_ID}"
         headers = {"Authorization": f"token {GITHUB_TOKEN}"}
         
-        # 准备要上传的任务数据
+        # 1. 准备要上传的任务数据
         current_tasks = []
         for t in self.tasks_data:
             current_tasks.append({
@@ -69,6 +74,7 @@ class LearningApp(QMainWindow):
                 "elapsed": t.elapsed_seconds, "done": t.is_completed
             })
             
+        # 2. 打包所有数据
         payload = {
             "points": self.total_points,
             "bank": self.time_bank,
@@ -76,15 +82,26 @@ class LearningApp(QMainWindow):
             "tasks": current_tasks
         }
         
-        content = json.dumps(payload, ensure_ascii=False)
-        data = {"files": {FILENAME: {"content": content}}}
-        
+        # 3. 核心补丁：处理 JSON 不认识时间对象的问题
+        from datetime import datetime, date # 确保函数内能识别时间类型
+        def datetime_handler(x):
+            if isinstance(x, (datetime, date)):
+                return x.isoformat() 
+            return str(x) # 其他不认识的类型直接转成字符串，防止崩溃
+
         try:
+            # 4. 序列化并发送
+            content = json.dumps(payload, ensure_ascii=False, default=datetime_handler)
+            data = {"files": {FILENAME: {"content": content}}}
+            
             res = requests.patch(url, headers=headers, json=data)
             if res.status_code == 200:
-                print("🚀 数据已自动同步到云端 Gist")
-        except:
-            print("📡 同步失败，请检查网络")
+                print(f"🚀 同步成功！当前云端积分: {self.total_points}")
+            else:
+                print(f"❌ 同步失败，错误码: {res.status_code}")
+        except Exception as e:
+            print(f"📡 网络异常: {e}")
+
     def __init__(self):
         super().__init__()
         self.setWindowTitle("学习积分助手 v1.5.2 - 路径死锁版")
