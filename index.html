@@ -1,7 +1,28 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-    <link rel="manifest" href="data:application/manifest+json,{'name':'学习助手','short_name':'助手','start_url':'.','display':'standalone','background_color':'#ffffff','theme_color':'#3498db'}">
+    <link rel="manifest" href='data:application/manifest+json,{
+    "name":"学习助手",
+    "short_name":"助手",
+    "start_url":".",
+    "display":"standalone",
+    "background_color":"#ffffff",
+    "theme_color":"#3498db",
+    "icons": [
+        {
+            "src": "icon.png",
+            "sizes": "512x512",
+            "type": "image/png"
+        }
+    ]
+}'>
+<link rel="apple-touch-icon" href="icon.png">
+
+<meta name="theme-color" content="#3498db">
+   
+<link rel="apple-touch-icon" href="icon.png">
+
+<meta name="theme-color" content="#3498db">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>学习助手 - 任务同步终端</title>
