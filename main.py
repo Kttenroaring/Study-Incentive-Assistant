@@ -29,10 +29,16 @@ class Task:
 class LearningApp(QMainWindow):
     def load_data_from_github(self):
         """启动时从云端拉取所有数据"""
-        url = f"https://api.github.com/gists/{GIST_ID}"
+        import time 
+        # 通过时间戳强制 GitHub 给新数据
+        cache_buster = int(time.time())
+        url = f"https://api.github.com/gists/{GIST_ID}?t={cache_buster}"
         headers = {"Authorization": f"token {GITHUB_TOKEN}"}
+        
         try:
+            # 改用了上面那个带 t= 的新 url
             response = requests.get(url, headers=headers)
+            
             if response.status_code == 200:
                 raw_content = response.json()['files'][FILENAME]['content']
                 data = json.loads(raw_content)
@@ -42,18 +48,16 @@ class LearningApp(QMainWindow):
                 self.time_bank = data.get("bank", {})
                 self.history_logs = data.get("logs", [])
                 
-                # 重建任务列表数据
-                self.tasks_data = []
-                for t in data.get("tasks", []):
-                    self.tasks_data.append(Task(
-                        t['name'], t['type'], t['target'], t['pts'], 
-                        t['checkin'], t['elapsed'], t['done']
-                    ))
-                print("✅ 联网读取成功！")
+                # 提示同步成功（方便在控制台看到进度）
+                print(f"✅ 云端同步成功！当前积分：{self.total_points}")
+                
+                # 如果界面上有显示积分的 Label，记得在这里调用更新函数
+                # 例如：self.label_points.setText(str(self.total_points))
+                
             else:
-                print(f"❌ 联网失败，状态码: {response.status_code}")
+                print(f"❌ 同步失败，状态码：{response.status_code}")
         except Exception as e:
-            print(f"📡 无法连接到 GitHub: {e}")
+            print(f"⚠️ 网络连接异常：{e}")
 
     def save_data_to_github(self):
         """当积分或任务改变时，同步到云端"""
