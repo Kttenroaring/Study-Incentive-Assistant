@@ -128,6 +128,7 @@ class LearningApp(QMainWindow):
         self.active_consume_type = None
 
         self.load_data() # 加载存档
+        self.load_data_from_github()
 
         self.main_timer = QTimer()
         self.main_timer.timeout.connect(self.on_timer_tick)
@@ -387,3 +388,4 @@ if __name__ == "__main__":
     app = QApplication(sys.argv)
     window = LearningApp(); window.show()
     sys.exit(app.exec())
+
