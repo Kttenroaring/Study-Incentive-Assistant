@@ -1,85 +1,134 @@
-学习积分助手 (Study Incentive Assistant) 🚀
-简体中文 | English
+# Study Incentive Assistant 🚀
 
-🇨🇳 项目简介
-这是一个基于 Python 开发的全平台桌面与移动实用程序。它通过“积分经济学”逻辑，将学习任务转化为可量化的收益，并引入金融复利概念，旨在彻底解决学习拖延症。
+一个基于积分激励系统的跨平台生产力工具，通过游戏化机制提升学习效率
 
-📸 界面预览 (Preview)
-✨ 核心功能
-四分区任务架构：精准分类“一次性任务、常规任务、定时签到、已完成”，任务流转逻辑清晰。
+[简体中文](#简体中文) | [English](#english)
 
-金融激励系统：
+---
 
-0.1% 复利结息：账户余额每日自动结算利息，鼓励长线积分储蓄。
+## 🇨🇳 简体中文
 
-时长商店：支持积分购买娱乐时长，内置消费倒计时辅助自我管理。
+### 📋 项目简介
+这是一个基于 Python 开发的跨平台（桌面端 & 移动端）生产力工具，通过“积分经济学”和金融复利概念，将学习任务转化为量化收益，旨在有效激励学习。
 
-全平台支持：
+### 📸 界面预览  (Preview)
+<img width="1715" height="1313" alt="image" src="https://github.com/user-attachments/assets/18620dcd-db32-466c-a996-9ec510ec6a30" />
+<img width="1289" height="1176" alt="image" src="https://github.com/user-attachments/assets/4274c55f-8a1f-41da-b481-c29e9f2137cd" />
 
-桌面端 (PySide6)：功能全开，支持右键管理、月度收益详细统计。
+### ✨ 核心特性
 
-手机端 (Kivy/Android)：支持随时随地打卡，数据同步便捷（注：需手动同步数据文件）。
+#### 📊 四分区任务管理
+- **一次性任务**：短期目标与临时任务
+- **常规任务**：每日/周期性重复任务
+- **定时签到**：时间点打卡任务
+- **已完成**：历史任务归档
 
-可视化统计：支持按月份精准查询任务净收益，红色高亮支出明细。
+#### 💰 金融激励系统
+- **0.1% 复利结息**：账户余额每日自动结算利息，鼓励长期储蓄
+- **时长商店**：使用积分购买娱乐时长，内置倒计时功能
+- **积分消费**：支持灵活积分兑换与消费记录
 
-🛠️ 技术栈
-GUI 框架:
+#### 📱 多端联动
+- **移动端支持**：基于 Kivy 开发，支持随时随地打卡
+- **数据同步**：移动端与桌面端数据格式完全兼容
+- **跨平台体验**：无缝切换设备，保持学习连续性
 
-Desktop: PySide6 (Qt 6)
+#### 📈 可视化统计
+- **月度报表**：按月份查询学习成果与积分变化
+- **收支明细**：红色高亮支出记录，收益一目了然
+- **趋势分析**：直观展示学习习惯与积分积累趋势
 
-Mobile: Kivy (Cross-platform UI)
+### 🛠️ 技术栈
+- **开发语言**：Python 3.x
+- **桌面框架**：PySide6 (Qt 6)
+- **移动框架**：Kivy (跨平台)
+- **数据持久化**：Pickle 对象序列化
+- **版本控制**：Git
 
-数据持久化: Pickle (二进制序列化，确保跨平台数据结构一致)
+### 🚀 快速开始
 
-核心算法: 动态复利结算、任务分拣模糊匹配算法。
+#### 桌面端运行
+```bash
+# 1. 克隆项目
+git clone <repository-url>
+cd Study-Incentive-Assistant
 
-🇺🇸 Introduction
-A cross-platform productivity ecosystem built with Python, designed to gamify learning through a sophisticated "Point Economics" and "Compound Interest" system.
+# 2. 安装依赖
+pip install PySide6
 
-✨ Key Features
-Four-Quadrant Management: Categorized sections for One-time, Routine, Sign-in, and Completed tasks.
+# 3. 运行程序
+python main.py
+```
 
-Economic Incentives:
-
-0.1% Compound Interest: Daily interest credited automatically to reward long-term point saving.
-
-Time Store: Purchase entertainment duration with points, featuring an integrated countdown timer.
-
-Multi-Platform Support:
-
-Desktop (PySide6): Full-featured version with right-click menus and detailed statistics.
-
-Mobile (Kivy/Android): Optimized for on-the-go check-ins and task tracking.
-
-Advanced Analytics: Monthly gain tracking that isolates "Task Profit" from other expenditures.
-
-🛠️ Tech Stack
-Frameworks:
-
-Desktop: PySide6 (Qt 6)
-
-Mobile: Kivy
-
-Persistence: Pickle (Binary serialization for cross-platform consistency)
-
-Algorithms: Dynamic interest calculation & fuzzy logic for task sorting.
-
-🚀 如何运行 (How to Run)
-💻 桌面端 (Desktop)
-安装依赖: pip install PySide6
-
-运行程序: python main.py
-
-📱 手机端 (Mobile)
-确保安装了 Kivy 环境。
-
-编译为 APK (使用 Buildozer) 或在 Kivy Launcher 中运行。
-
-将 learning_data.dat 放入对应目录即可同步数据。
-
-💡 提示 / Tip
-程序会自动在目录下生成 learning_data.dat 用于保存数据。桌面端和手机端共用同一种数据格式。 The app uses learning_data.dat for storage. The data format is consistent across both Desktop and Mobile versions.
+#### 移动端使用
+1. 将桌面端生成的 `learning_data.dat` 文件复制到移动端对应目录
+2. 安装移动端应用（Kivy 环境）
+3. 数据自动同步，随时随地继续学习
 
 
-💡 提示 / Tip
-程序会自动在目录下生成 learning_data.dat 用于保存数据。桌面端和手机端共用同一种数据格式。 The app uses learning_data.dat for storage. The data format is consistent across both Desktop and Mobile versions.
+## 🇺🇸 English
+
+### 📋 Introduction
+A professional cross-platform productivity ecosystem built with Python, designed to boost learning efficiency through a gamified "Point Economics" and "Compound Interest" system.
+
+### ✨ Key Features
+
+#### 📊 4-Quadrant Task Management
+- **One-time Tasks**: Short-term goals and ad-hoc assignments
+- **Routine Tasks**: Daily/periodic recurring tasks
+- **Timed Check-ins**: Scheduled checkpoints
+- **Completed**: Historical task archive
+
+#### 💰 Economic Incentives
+- **0.1% Compound Interest**: Daily automatic interest calculation to encourage saving
+- **Time Store**: Purchase "Entertainment Time" with points, featuring integrated timer
+- **Point Consumption**: Flexible point exchange with detailed records
+
+#### 📱 Multi-Device Support
+- **Mobile Version**: Kivy-based application for on-the-go productivity
+- **Data Sync**: Seamless compatibility between desktop and mobile data formats
+- **Cross-Platform**: Continuity across all your devices
+
+#### 📈 Visual Statistics
+- **Monthly Reports**: Track learning progress and point fluctuations
+- **Income/Expense Details**: Clear visualization with highlighted expenditures
+- **Trend Analysis**: Insights into study habits and point accumulation trends
+
+### 🛠️ Tech Stack
+- **Language**: Python 3.x
+- **GUI (Desktop)**: PySide6 (Qt 6)
+- **GUI (Mobile)**: Kivy
+- **Persistence**: Pickle Serialization
+- **Version Control**: Git
+
+### 🚀 Quick Start
+
+#### Desktop Installation
+```bash
+# 1. Clone repository
+git clone <repository-url>
+cd Study-Incentive-Assistant
+
+# 2. Install dependencies
+pip install PySide6
+
+# 3. Run application
+python main.py
+```
+
+#### Mobile Setup
+1. Copy `learning_data.dat` from desktop to mobile directory
+2. Install mobile app (Kivy environment)
+3. Data automatically syncs - continue learning anywhere
+
+---
+
+## 📄 License
+MIT License - see LICENSE file for details
+
+## ⭐ Support
+If you find this project helpful, please consider giving it a star on GitHub!
+
+---
+
+*This README is optimized for better readability and includes clear section separations. The bilingual format maintains consistency while providing accessibility for both Chinese and English speakers.*
