@@ -1,180 +1,58 @@
 # -*- coding: utf-8 -*-
-import requests
-import json
 import sys
 import pickle
 import os
-GITHUB_TOKEN =os.getenv("STUDY_ASSIST_TOKEN")
-GIST_ID = "d3d4d5e4e2293d4b528dac886951c6ac"
-FILENAME = "study-incentive-assistant"
-from datetime import datetime, timedelta
+import requests
+import json
+from datetime import datetime
 from PySide6.QtWidgets import (QApplication, QMainWindow, QTabWidget, 
                                QWidget, QVBoxLayout, QLabel, QPushButton, 
                                QLineEdit, QHBoxLayout, QListWidget, QMessageBox, 
-                               QInputDialog, QListWidgetItem, QRadioButton, QButtonGroup, 
+                               QListWidgetItem, QRadioButton, QButtonGroup, 
                                QMenu, QComboBox)
-from PySide6.QtCore import Qt, QTimer, QTime
+from PySide6.QtCore import Qt, QTimer
 
-# 任务类
+# --- 核心任务类 ---
 class Task:
-    def __init__(self, name, task_type, target_min, base_points, checkin_time=""):
+    def __init__(self, name, task_type, target_min, base_points, max_daily=1):
         self.name = name
         self.task_type = task_type
         self.target_min = target_min
         self.base_points = base_points
-        self.checkin_time = checkin_time
+        self.max_daily = max_daily
+        self.current_daily = 0  
+        self.last_date = datetime.now().strftime("%Y-%m-%d")
         self.elapsed_seconds = 0
         self.is_completed = False
 
 class LearningApp(QMainWindow):
-    def load_data_from_github(self):
-        """启动时从云端拉取所有数据"""
-        import time 
-        # 通过时间戳强制 GitHub 给新数据
-        cache_buster = int(time.time())
-        url = f"https://api.github.com/gists/{GIST_ID}?t={cache_buster}"
-        headers = {"Authorization": f"token {GITHUB_TOKEN}"}
-        
-        try:
-            # 改用了上面那个带 t= 的新 url
-            response = requests.get(url, headers=headers)
-            
-            if response.status_code == 200:
-                raw_content = response.json()['files'][FILENAME]['content']
-                data = json.loads(raw_content)
-                
-                # --- 同步所有变量 ---
-                self.total_points = data.get("points", 0)
-                self.time_bank = data.get("bank", {})
-                self.history_logs = data.get("logs", [])
-                
-                # 提示同步成功（方便在控制台看到进度）
-                print(f"✅ 云端同步成功！当前积分：{self.total_points}")
-                
-                # 如果界面上有显示积分的 Label，记得在这里调用更新函数
-                # 例如：self.label_points.setText(str(self.total_points))
-                
-            else:
-                print(f"❌ 同步失败，状态码：{response.status_code}")
-        except Exception as e:
-            print(f"⚠️ 网络连接异常：{e}")
-
-    def save_data_to_github(self):
-        """当积分或任务改变时，同步到云端"""
-        # 如果 GITHUB_TOKEN 为空，直接返回，防止报错
-        if not GITHUB_TOKEN:
-            print("⚠️ 未检测到 Token，跳过云端同步")
-            return
-
-        url = f"https://api.github.com/gists/{GIST_ID}"
-        headers = {"Authorization": f"token {GITHUB_TOKEN}"}
-        
-        # 1. 准备要上传的任务数据
-        current_tasks = []
-        for t in self.tasks_data:
-            current_tasks.append({
-                "name": t.name, "type": t.task_type, "target": t.target_min,
-                "pts": t.base_points, "checkin": t.checkin_time,
-                "elapsed": t.elapsed_seconds, "done": t.is_completed
-            })
-            
-        # 2. 打包所有数据
-        payload = {
-            "points": self.total_points,
-            "bank": self.time_bank,
-            "logs": self.history_logs,
-            "tasks": current_tasks
-        }
-        
-        # 3. 核心补丁：处理 JSON 不认识时间对象的问题
-        from datetime import datetime, date # 确保函数内能识别时间类型
-        def datetime_handler(x):
-            if isinstance(x, (datetime, date)):
-                return x.isoformat() 
-            return str(x) # 其他不认识的类型直接转成字符串，防止崩溃
-
-        try:
-            # 4. 序列化并发送
-            content = json.dumps(payload, ensure_ascii=False, default=datetime_handler)
-            data = {"files": {FILENAME: {"content": content}}}
-            
-            res = requests.patch(url, headers=headers, json=data)
-            if res.status_code == 200:
-                print(f"🚀 同步成功！当前云端积分: {self.total_points}")
-            else:
-                print(f"❌ 同步失败，错误码: {res.status_code}")
-        except Exception as e:
-            print(f"📡 网络异常: {e}")
-
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("学习积分助手 v1.5.2 - 路径死锁版")
+        self.setWindowTitle("学习积分助手 v1.6.9 - 稳定修复版")
         
-        # --- 【核心修改：锁定路径】 ---
-        # 无论从哪里运行，都强制定位到当前脚本所在的真实目录
-        if getattr(sys, 'frozen', False):
-            base_path = os.path.dirname(sys.executable)
-        else:
-            base_path = os.path.dirname(os.path.abspath(__file__))
-        
-        # 存档文件现在永远跟随 .py 文件，不会跑到 C 盘
-        self.data_file = os.path.join(base_path, "learning_data.dat")
-        # ----------------------------
-
+        self.data_file = "learning_data.dat"
         self.total_points = 0
         self.time_bank = {} 
         self.history_logs = []
-        self.tasks_data = [] 
+        self.last_interest_date = ""
         self.active_consume_type = None
 
-        self.load_data() # 加载存档
-        self.load_data_from_github()
+        self.init_ui()
+        self.load_data() 
 
         self.main_timer = QTimer()
         self.main_timer.timeout.connect(self.on_timer_tick)
         self.store_timer = QTimer()
         self.store_timer.timeout.connect(self.update_store_timer)
 
-        self.init_ui()
-
-    def save_data(self):
-        try:
-            current_tasks = []
-            for i in range(self.task_list.count()):
-                current_tasks.append(self.task_list.item(i).data(Qt.UserRole))
-            
-            data = {
-                "points": self.total_points,
-                "bank": self.time_bank,
-                "logs": self.history_logs,
-                "tasks": current_tasks
-            }
-            with open(self.data_file, "wb") as f:
-                pickle.dump(data, f)
-        except Exception as e:
-            print(f"存档失败: {e}")
-
-    def load_data(self):
-        if os.path.exists(self.data_file):
-            try:
-                with open(self.data_file, "rb") as f:
-                    data = pickle.load(f)
-                    self.total_points = data.get("points", 0)
-                    self.time_bank = data.get("bank", {})
-                    self.history_logs = data.get("logs", [])
-                    self.tasks_data = data.get("tasks", [])
-            except Exception as e:
-                print(f"读取存档失败: {e}")
-
-    # 下面的 UI 代码和逻辑保持不变
     def init_ui(self):
-        self.setGeometry(100, 100, 1150, 850)
+        self.setGeometry(100, 100, 1100, 800)
         self.central_widget = QWidget()
         self.setCentralWidget(self.central_widget)
         self.main_layout = QVBoxLayout(self.central_widget)
 
         self.points_label = QLabel(f"💰 当前总积分: {self.total_points}")
-        self.points_label.setStyleSheet("font-size: 26px; color: #E67E22; font-weight: bold; padding: 10px;")
+        self.points_label.setStyleSheet("font-size: 24px; color: #E67E22; font-weight: bold; padding: 10px;")
         self.main_layout.addWidget(self.points_label)
 
         self.tab_widget = QTabWidget()
@@ -182,210 +60,348 @@ class LearningApp(QMainWindow):
 
         self.create_task_tab()
         self.create_store_tab()
-        self.create_reward_tab()
+        self.create_reward_tab() # ✨ 补回实物奖励页签
         self.create_stat_tab()
-        
-        for t in self.tasks_data:
-            item = QListWidgetItem(f"[{t.task_type}] {t.name} ({t.base_points}分)")
-            if t.is_completed: 
-                item.setText(f"✅ {t.name} (已完成)")
-                item.setForeground(Qt.gray)
-            item.setData(Qt.UserRole, t)
-            self.task_list.addItem(item)
-        self.update_all_ui()
 
     def create_task_tab(self):
         tab = QWidget(); layout = QVBoxLayout(tab)
-        add_box = QVBoxLayout()
         h1 = QHBoxLayout()
-        self.t_name_in = QLineEdit(); self.t_name_in.setPlaceholderText("任务名")
-        self.t_min_in = QLineEdit(); self.t_min_in.setPlaceholderText("预计分钟")
+        self.t_name_in = QLineEdit(); self.t_name_in.setPlaceholderText("任务名称")
+        self.t_min_in = QLineEdit(); self.t_min_in.setPlaceholderText("分钟")
         self.t_pts_in = QLineEdit(); self.t_pts_in.setPlaceholderText("积分")
         h1.addWidget(self.t_name_in); h1.addWidget(self.t_min_in); h1.addWidget(self.t_pts_in)
+        
         h2 = QHBoxLayout()
         self.t_type_group = QButtonGroup(self)
         self.r1 = QRadioButton("一次性"); self.r1.setChecked(True); self.t_type_group.addButton(self.r1, 0)
-        self.r2 = QRadioButton("常规"); self.t_type_group.addButton(self.r2, 1)
-        self.r3 = QRadioButton("签到"); self.t_type_group.addButton(self.r3, 2)
-        self.checkin_in = QLineEdit(); self.checkin_in.setPlaceholderText("签到截止(如 08:30)")
+        self.r2 = QRadioButton("常规任务"); self.t_type_group.addButton(self.r2, 1)
+        self.r3 = QRadioButton("定时签到"); self.t_type_group.addButton(self.r3, 2)
+        self.t_limit_in = QLineEdit(); self.t_limit_in.setText("1"); self.t_limit_in.setFixedWidth(50)
         btn_add = QPushButton("➕ 添加任务"); btn_add.clicked.connect(self.add_task)
-        h2.addWidget(self.r1); h2.addWidget(self.r2); h2.addWidget(self.r3); h2.addWidget(self.checkin_in); h2.addWidget(btn_add)
-        add_box.addLayout(h1); add_box.addLayout(h2); layout.addLayout(add_box)
-        self.task_list = QListWidget(); self.task_list.setContextMenuPolicy(Qt.CustomContextMenu)
-        self.task_list.customContextMenuRequested.connect(lambda p: self.show_del_menu(self.task_list, p))
+        h2.addWidget(self.r1); h2.addWidget(self.r2); h2.addWidget(self.r3); h2.addWidget(QLabel("上限:")); h2.addWidget(self.t_limit_in); h2.addWidget(btn_add)
+        
+        layout.addLayout(h1); layout.addLayout(h2)
+        self.task_list = QListWidget()
+        self.task_list.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.task_list.customContextMenuRequested.connect(self.show_task_menu)
         layout.addWidget(self.task_list)
+        
         ctrl = QHBoxLayout()
-        self.label_task_time = QLabel("用时: 00:00")
+        self.label_task_time = QLabel("计时: 00:00")
         btn_start = QPushButton("开始/暂停"); btn_start.clicked.connect(self.toggle_task_timer)
-        btn_manual = QPushButton("补录"); btn_manual.clicked.connect(self.manual_record)
-        btn_finish = QPushButton("结算/打卡"); btn_finish.clicked.connect(self.finish_task)
-        ctrl.addWidget(self.label_task_time); ctrl.addWidget(btn_start); ctrl.addWidget(btn_manual); ctrl.addWidget(btn_finish)
+        btn_finish = QPushButton("结算任务"); btn_finish.clicked.connect(self.finish_task)
+        ctrl.addWidget(self.label_task_time); ctrl.addWidget(btn_start); ctrl.addWidget(btn_finish)
         layout.addLayout(ctrl); self.tab_widget.addTab(tab, "学习任务")
 
     def create_store_tab(self):
         tab = QWidget(); layout = QVBoxLayout(tab)
         add_box = QHBoxLayout()
-        self.s_name_in = QLineEdit(); self.s_name_in.setPlaceholderText("商品名"); self.s_pts_in = QLineEdit(); self.s_pts_in.setPlaceholderText("价格"); self.s_min_in = QLineEdit(); self.s_min_in.setPlaceholderText("分钟")
-        btn_s_add = QPushButton("上架"); btn_s_add.clicked.connect(self.add_store_item)
-        add_box.addWidget(self.s_name_in); add_box.addWidget(self.s_pts_in); add_box.addWidget(self.s_min_in); add_box.addWidget(btn_s_add); layout.addLayout(add_box)
-        self.store_list = QListWidget(); self.store_list.itemClicked.connect(self.buy_store_item)
-        self.store_list.setContextMenuPolicy(Qt.CustomContextMenu)
-        self.store_list.customContextMenuRequested.connect(lambda p: self.show_del_menu(self.store_list, p))
-        layout.addWidget(QLabel("🛒 点击购买时长:")); layout.addWidget(self.store_list)
-        self.bank_display = QLabel("银行余额: 空"); self.bank_display.setStyleSheet("background:#eee; padding:10px;")
+        self.s_name_in = QLineEdit(); self.s_pts_in = QLineEdit(); self.s_min_in = QLineEdit()
+        self.s_name_in.setPlaceholderText("商品名"); self.s_pts_in.setPlaceholderText("积分"); self.s_min_in.setPlaceholderText("分钟")
+        btn_s_add = QPushButton("上架商品"); btn_s_add.clicked.connect(self.add_store_item)
+        add_box.addWidget(self.s_name_in); add_box.addWidget(self.s_pts_in); add_box.addWidget(self.s_min_in); add_box.addWidget(btn_s_add)
+        layout.addLayout(add_box)
+        
+        self.store_list = QListWidget()
+        self.store_list.itemClicked.connect(self.buy_store_item)
+        layout.addWidget(QLabel("🛒 点击购买:"))
+        layout.addWidget(self.store_list)
+        
+        self.bank_display = QLabel("银行余额: 空")
+        self.bank_display.setStyleSheet("background:#f0f0f0; padding:10px; font-weight:bold;")
         layout.addWidget(self.bank_display)
-        self.consume_list = QListWidget(); self.consume_list.itemClicked.connect(self.start_consume_logic)
-        for k in self.time_bank.keys(): self.consume_list.addItem(k)
-        layout.addWidget(QLabel("🚀 点击下方种类开始消费:")); layout.addWidget(self.consume_list)
+        
+        self.consume_list = QListWidget()
+        self.consume_list.itemClicked.connect(self.start_consume_logic)
+        self.consume_list.setContextMenuPolicy(Qt.CustomContextMenu) 
+        self.consume_list.customContextMenuRequested.connect(self.show_refund_menu)
+        layout.addWidget(QLabel("🚀 点击消费 (右键退货):"))
+        layout.addWidget(self.consume_list)
+        
         self.label_s_status = QLabel("状态: 闲置")
-        btn_stop = QPushButton("⏹️ 停止消费"); btn_stop.clicked.connect(self.stop_consuming)
-        layout.addWidget(self.label_s_status); layout.addWidget(btn_stop); self.tab_widget.addTab(tab, "时长商店")
+        btn_stop = QPushButton("停止消费"); btn_stop.clicked.connect(self.stop_consuming)
+        layout.addWidget(self.label_s_status); layout.addWidget(btn_stop)
+        self.tab_widget.addTab(tab, "时长商店")
 
     def create_reward_tab(self):
+        """✨ 补回遗失的实物奖励页签"""
         tab = QWidget(); layout = QVBoxLayout(tab)
-        add_box = QHBoxLayout()
-        self.r_name_in = QLineEdit(); self.r_name_in.setPlaceholderText("奖励名"); self.r_pts_in = QLineEdit(); self.r_pts_in.setPlaceholderText("积分")
-        btn_r_add = QPushButton("上架奖励"); btn_r_add.clicked.connect(self.add_reward_item)
-        add_box.addWidget(self.r_name_in); add_box.addWidget(self.r_pts_in); add_box.addWidget(btn_r_add); layout.addLayout(add_box)
-        self.reward_list = QListWidget(); self.reward_list.itemClicked.connect(self.buy_reward_direct)
-        self.reward_list.setContextMenuPolicy(Qt.CustomContextMenu)
-        self.reward_list.customContextMenuRequested.connect(lambda p: self.show_del_menu(self.reward_list, p))
-        layout.addWidget(QLabel("🎁 实物奖励:")); layout.addWidget(self.reward_list)
-        self.history_list = QListWidget(); layout.addWidget(QLabel("✅ 领用记录:")); layout.addWidget(self.history_list)
-        self.tab_widget.addTab(tab, "购物奖励")
+        h_box = QHBoxLayout()
+        self.r_name_in = QLineEdit(); self.r_name_in.setPlaceholderText("实物奖品名称")
+        self.r_pts_in = QLineEdit(); self.r_pts_in.setPlaceholderText("扣除积分")
+        btn_r_add = QPushButton("上架"); btn_r_add.clicked.connect(self.add_reward_item)
+        h_box.addWidget(self.r_name_in); h_box.addWidget(self.r_pts_in); h_box.addWidget(btn_r_add)
+        layout.addLayout(h_box)
+
+        self.reward_list = QListWidget()
+        self.reward_list.itemClicked.connect(self.redeem_reward)
+        layout.addWidget(QLabel("🎁 点击奖品直接领取:"))
+        layout.addWidget(self.reward_list)
+        self.tab_widget.addTab(tab, "实物奖励")
+
+    def show_task_menu(self, pos):
+        item = self.task_list.itemAt(pos)
+        if not item: return
+        menu = QMenu()
+        del_act = menu.addAction("🗑️ 删除任务")
+        # 修正：使用 exec() 接收菜单动作
+        action = menu.exec(self.task_list.mapToGlobal(pos))
+        if action == del_act:
+            self.task_list.takeItem(self.task_list.row(item))
+            self.save_data()
+
+    def show_refund_menu(self, pos):
+        item = self.consume_list.itemAt(pos)
+        if not item: return
+        menu = QMenu()
+        refund_act = menu.addAction("💰 退货 (返还积分并清空该项)")
+        action = menu.exec(self.consume_list.mapToGlobal(pos))
+        
+        if action == refund_act:
+            name = item.text()
+            refund_pts = 0
+            for log in reversed(self.history_logs):
+                if log["type"] == "支出" and name in log["name"]:
+                    refund_pts = abs(log["points"])
+                    break
+            
+            if refund_pts > 0:
+                self.total_points += refund_pts
+                if name in self.time_bank: del self.time_bank[name]
+                self.add_log("退货", f"退还: {name}", refund_pts)
+                self.sync_consume_list(); self.update_all_ui(); self.save_data()
+                QMessageBox.information(self, "成功", f"已退还 {refund_pts} 积分。")
 
     def create_stat_tab(self):
         tab = QWidget(); layout = QVBoxLayout(tab)
-        filter_box = QHBoxLayout()
-        filter_box.addWidget(QLabel("📅 选择查看历史："))
-        self.year_combo = QComboBox()
-        curr_year = datetime.now().year
-        for y in range(2026, curr_year + 5): self.year_combo.addItem(str(y))
+        self.year_combo = QComboBox(); self.year_combo.addItem("2026")
         self.month_combo = QComboBox()
-        for m in range(1, 13): self.month_combo.addItem(f"{m}月", m)
+        for i in range(1, 13): self.month_combo.addItem(f"{i}月", i)
         self.month_combo.setCurrentIndex(datetime.now().month - 1)
-        btn_query = QPushButton("🔍 刷新查询"); btn_query.clicked.connect(self.refresh_stats)
-        filter_box.addWidget(self.year_combo); filter_box.addWidget(self.month_combo); filter_box.addWidget(btn_query); filter_box.addStretch()
-        layout.addLayout(filter_box)
-        self.lbl_month_total = QLabel("该月累计收益: 0 分")
-        self.lbl_month_total.setStyleSheet("font-size: 20px; font-weight: bold; color: #16A085; background: #E8F8F5; padding: 15px;")
-        layout.addWidget(self.lbl_month_total)
-        log_layout = QHBoxLayout()
-        v1 = QVBoxLayout(); v1.addWidget(QLabel("📜 任务记录:")); self.log_tasks = QListWidget(); v1.addWidget(self.log_tasks)
-        v2 = QVBoxLayout(); v2.addWidget(QLabel("💸 收支明细:")); self.log_points = QListWidget(); v2.addWidget(self.log_points)
-        log_layout.addLayout(v1); log_layout.addLayout(v2); layout.addLayout(log_layout)
+        btn_refresh = QPushButton("🔍 刷新统计"); btn_refresh.clicked.connect(self.refresh_stats)
+        
+        layout.addWidget(self.year_combo); layout.addWidget(self.month_combo); layout.addWidget(btn_refresh)
+        self.lbl_month_total = QLabel("本月收益: 0 分")
+        self.lbl_month_total.setStyleSheet("font-size: 18px; color: #27ae60; font-weight:bold;")
+        self.log_points = QListWidget()
+        layout.addWidget(self.lbl_month_total); layout.addWidget(self.log_points)
         self.tab_widget.addTab(tab, "统计成果")
 
-    def add_log(self, l_type, name, points, duration=0):
-        log = {"time": datetime.now(), "type": l_type, "name": name, "points": points, "duration": duration}
-        self.history_logs.append(log)
-        self.save_data() 
-        self.refresh_stats()
+    def load_data(self):
+        """数据兼容性修复逻辑"""
+        if not os.path.exists(self.data_file): return
+        try:
+            with open(self.data_file, "rb") as f:
+                data = pickle.load(f)
+                self.total_points = data.get("points", 0)
+                self.time_bank = data.get("bank", {})
+                self.history_logs = data.get("logs", [])
+                self.last_interest_date = data.get("last_interest_date", "")
+                
+                self.task_list.clear()
+                for task in data.get("tasks", []):
+                    # 补全缺失属性 
+                    if not hasattr(task, 'current_daily'): task.current_daily = 0
+                    if not hasattr(task, 'max_daily'): task.max_daily = 1
+                    if not hasattr(task, 'is_completed'): task.is_completed = False
+                    
+                    item = QListWidgetItem()
+                    item.setData(Qt.UserRole, task)
+                    self.update_task_display(item, task)
+                    self.task_list.addItem(item)
+                
+                self.calculate_interest()
+                self.sync_consume_list(); self.update_all_ui(); self.refresh_stats()
+        except Exception as e:
+            print(f"数据加载失败: {e}")
 
-    def finish_task(self):
+    def finish_task(self): 
         item = self.task_list.currentItem()
         if not item: return
         task = item.data(Qt.UserRole)
-        if task.is_completed: return
+        
+        today = datetime.now().strftime("%Y-%m-%d")
+        if getattr(task, 'last_date', "") != today:
+            task.current_daily = 0
+            task.last_date = today
+            if task.task_type != "一次性": task.is_completed = False
+
+        if task.is_completed: 
+            QMessageBox.warning(self, "提醒", "该任务今日已达上限！")
+            return
+        
         self.main_timer.stop()
-        earned = 0; actual_min = task.elapsed_seconds // 60
-        if task.task_type == "签到":
-            if QTime.currentTime() <= QTime.fromString(task.checkin_time, "HH:mm"): earned = task.base_points
-            else: QMessageBox.warning(self, "失败", "签到超时！"); return
-        else: earned = task.base_points + max(0, task.target_min - actual_min)
-        self.total_points += earned
-        self.add_log("任务", task.name, earned, actual_min)
-        if task.task_type == "一次性":
-            task.is_completed = True; item.setText(f"✅ {task.name} (+{earned})"); item.setForeground(Qt.gray)
-        else: task.elapsed_seconds = 0; QMessageBox.information(self, "成功", f"获得 {earned} 积分！")
+        self.total_points += task.base_points
+        self.add_log("任务", task.name, task.base_points)
+        
+        task.current_daily = getattr(task, 'current_daily', 0) + 1
+        if task.task_type == "一次性" or task.current_daily >= getattr(task, 'max_daily', 1):
+            task.is_completed = True
+            
+        self.update_task_display(item, task)
         self.update_all_ui(); self.save_data()
-        self.save_data_to_github()
+
+    def calculate_interest(self):
+        """
+        ✨ 简体中文优化版结息逻辑
+        功能：支持极小金额结息，保留4位小数，确保增长可见。
+        """
+        # 获取当前日期
+        today_dt = datetime.now().date()
+        today_str = today_dt.strftime("%Y-%m-%d")
+        
+        # 如果是第一次运行，记录今天日期并退出
+        if not self.last_interest_date: 
+            self.last_interest_date = today_str
+            return
+            
+        try:
+            # 计算距离上次结息过了几天
+            last_dt = datetime.strptime(self.last_interest_date, "%Y-%m-%d").date()
+            days = (today_dt - last_dt).days
+            
+            # 如果日期已经跳到第二天或更久
+            if days > 0:
+                # 计算利息：当前总分 * 0.1% (0.001) * 天数
+                earned = self.total_points * 0.001 * days
+                
+                # 只要利息大于 0 就发放并记录
+                if earned > 0:
+                    self.total_points += earned
+                    # 在统计记录中保留4位小数
+                    self.add_log("利息", f"{days}天自动结息 (日率0.1%)", round(earned, 4))
+                
+                # 更新结息日期为今天，防止重复计算
+                self.last_interest_date = today_str
+                # 保存数据，确保利息不会因为意外关闭而丢失
+                self.save_data()
+                # 刷新主界面显示的积分
+                self.update_all_ui() 
+                
+        except Exception as e:
+            print(f"结息过程出错: {e}")
+
+    def add_log(self, l_type, name, points):
+        self.history_logs.append({"time": datetime.now(), "type": l_type, "name": name, "points": points})
+        self.refresh_stats()
+
+    def update_task_display(self, item, task):
+        limit = f"({getattr(task, 'current_daily', 0)}/{getattr(task, 'max_daily', 1)})" if task.task_type != "一次性" else ""
+        item.setText(f"{'✅' if task.is_completed else '🕒'} [{task.task_type}] {task.name} {limit}")
+        item.setForeground(Qt.gray if task.is_completed else Qt.black)
 
     def add_task(self):
-        name = self.t_name_in.text(); t_min = int(self.t_min_in.text() or 0); b_pts = int(self.t_pts_in.text() or 0)
-        task = Task(name, ["一次性", "常规", "签到"][self.t_type_group.checkedId()], t_min, b_pts, self.checkin_in.text())
-        item = QListWidgetItem(f"[{task.task_type}] {name} ({b_pts}分)"); item.setData(Qt.UserRole, task)
-        self.task_list.addItem(item); self.t_name_in.clear(); self.save_data()
-        self.save_data_to_github()
+        n = self.t_name_in.text(); m = int(self.t_min_in.text() or 0); p = int(self.t_pts_in.text() or 0)
+        limit = int(self.t_limit_in.text() or 1) 
+        if not n: return
+        t_type = ["一次性", "常规任务", "定时签到"][self.t_type_group.checkedId()]
+        task = Task(n, t_type, m, p, max_daily=limit)
+        item = QListWidgetItem(); item.setData(Qt.UserRole, task)
+        self.update_task_display(item, task); self.task_list.addItem(item)
+        self.save_data(); self.t_name_in.clear()
+
+    def add_store_item(self): 
+        n = self.s_name_in.text(); p = int(self.s_pts_in.text() or 0); m = int(self.s_min_in.text() or 0)
+        if not n: return
+        item = QListWidgetItem(f"🎁 {n} | {p}分 | {m}分钟")
+        item.setData(Qt.UserRole, {"name": n, "pts": p, "min": m})
+        self.store_list.addItem(item)
+        if n not in self.time_bank: self.time_bank[n] = 0
+        self.sync_consume_list(); self.save_data(); self.s_name_in.clear()
 
     def buy_store_item(self, item):
         d = item.data(Qt.UserRole)
         if self.total_points >= d["pts"]:
-            self.total_points -= d["pts"]; self.time_bank[d["name"]] += d["min"] * 60
-            self.add_log("支出", f"购买时长: {d['name']}", -d['pts']); self.update_all_ui(); self.save_data()
+            self.total_points -= d["pts"]
+            self.time_bank[d["name"]] = self.time_bank.get(d["name"], 0) + d["min"] * 60
+            self.add_log("支出", f"购买: {d['name']}", -d['pts'])
+            self.sync_consume_list(); self.update_all_ui(); self.save_data()
+        else:
+            QMessageBox.warning(self, "积分不足", "积分不够哦！")
 
-    def buy_reward_direct(self, item):
+    def add_reward_item(self):
+        n = self.r_name_in.text(); p = int(self.r_pts_in.text() or 0)
+        if not n: return
+        item = QListWidgetItem(f"🏆 {n} | 需 {p} 分")
+        item.setData(Qt.UserRole, {"name": n, "pts": p})
+        self.reward_list.addItem(item); self.r_name_in.clear(); self.save_data()
+
+    def redeem_reward(self, item):
         d = item.data(Qt.UserRole)
         if self.total_points >= d["pts"]:
-            self.total_points -= d["pts"]; self.history_list.addItem(f"领用: {d['name']}")
-            self.add_log("支出", f"领用奖励: {d['name']}", -d['pts']); self.update_all_ui(); self.save_data()
-
-    def refresh_stats(self):
-        self.log_tasks.clear(); self.log_points.clear()
-        ty, tm = int(self.year_combo.currentText()), self.month_combo.currentData()
-        gain = 0
-        for log in reversed(self.history_logs):
-            if log["time"].year == ty and log["time"].month == tm:
-                t_str = log["time"].strftime("%m-%d %H:%M")
-                if log["type"] == "任务":
-                    gain += log["points"]
-                    self.log_tasks.addItem(f"[{t_str}] {log['name']} | 用时: {log['duration']}min | 收益: +{log['points']}")
-                sign = "+" if log["points"] > 0 else ""
-                self.log_points.addItem(f"[{t_str}] {log['name']} : {sign}{log['points']}")
-        self.lbl_month_total.setText(f"📅 {ty}年{tm}月 累计收益: {gain} 分")
-
-    def show_del_menu(self, widget, pos):
-        menu = QMenu(); del_act = menu.addAction("🗑️ 删除")
-        if menu.exec(widget.mapToGlobal(pos)) == del_act: 
-            widget.takeItem(widget.currentRow()); self.save_data()
-
-    def add_store_item(self):
-        n, p, m = self.s_name_in.text(), int(self.s_pts_in.text() or 0), int(self.s_min_in.text() or 0)
-        item = QListWidgetItem(f"{n} | {p}分 | +{m}min"); item.setData(Qt.UserRole, {"name": n, "pts": p, "min": m})
-        self.store_list.addItem(item)
-        if n not in self.time_bank: self.time_bank[n] = 0; self.consume_list.addItem(n); self.save_data()
+            self.total_points -= d["pts"]
+            self.add_log("实物", f"领取: {d['name']}", -d['pts'])
+            self.update_all_ui(); self.save_data()
+            QMessageBox.information(self, "成功", f"领取【{d['name']}】成功！")
+        else:
+            QMessageBox.warning(self, "积分不足", "再努力学习一下吧！")
 
     def start_consume_logic(self, item):
-        if self.time_bank.get(item.text(), 0) > 0: self.active_consume_type = item.text(); self.store_timer.start(1000)
+        cat = item.text()
+        if self.time_bank.get(cat, 0) > 0: # 修正：已移除干扰文本 [cite: 128]
+            self.active_consume_type = cat
+            self.store_timer.start(1000)
+            self.label_s_status.setText(f"🔥 正在消费: {cat}")
+        else:
+            QMessageBox.warning(self, "余额不足", f"【{cat}】没有剩余时间了！")
 
     def update_store_timer(self):
         cat = self.active_consume_type
-        if self.time_bank[cat] > 0:
-            self.time_bank[cat] -= 1; m, s = divmod(self.time_bank[cat], 60)
-            self.label_s_status.setText(f"消费【{cat}】中: 剩 {m:02d}:{s:02d}"); self.update_all_ui()
-        else: self.total_points -= 1; self.update_all_ui(); self.label_s_status.setText("⚠️ 余额空！倒扣积分中！")
-        if self.time_bank[cat] % 60 == 0: self.save_data() 
+        if cat and self.time_bank.get(cat, 0) > 0:
+            self.time_bank[cat] -= 1
+            m, s = divmod(self.time_bank[cat], 60)
+            self.label_s_status.setText(f"🔥 {cat} 剩余: {m:02d}:{s:02d}")
+            self.update_all_ui()
+        else:
+            self.stop_consuming()
 
-    def stop_consuming(self): self.store_timer.stop(); self.active_consume_type = None; self.label_s_status.setText("状态: 闲置"); self.save_data()
+    def stop_consuming(self):
+        self.store_timer.stop(); self.active_consume_type = None; self.label_s_status.setText("状态: 闲置")
+        self.update_all_ui(); self.save_data()
 
-    def add_reward_item(self):
-        n, p = self.r_name_in.text(), int(self.r_pts_in.text() or 0)
-        item = QListWidgetItem(f"🎁 {n} | {p}分"); item.setData(Qt.UserRole, {"name": n, "pts": p})
-        self.reward_list.addItem(item); self.save_data()
+    def refresh_stats(self):
+        self.log_points.clear()
+        selected_month = self.month_combo.currentData()
+        gain = 0
+        for log in reversed(self.history_logs):
+            if log["time"].month == selected_month:
+                pts = log["points"]
+                it = QListWidgetItem(f"[{log['time'].strftime('%m-%d %H:%M')}] {log['name']}: {pts}")
+                if pts < 0: it.setForeground(Qt.red)
+                self.log_points.addItem(it)
+                if log['type'] == "任务": gain += pts
+        self.lbl_month_total.setText(f"本月收益: {gain} 分")
 
-    def toggle_task_timer(self):
-        if self.main_timer.isActive(): self.main_timer.stop()
-        else: self.main_timer.start(1000)
+    def save_data(self):
+        try: # 修正：已移除干扰文本 [cite: 144]
+            tasks = [self.task_list.item(i).data(Qt.UserRole) for i in range(self.task_list.count())]
+            data = {"points": self.total_points, "bank": self.time_bank, "logs": self.history_logs, "tasks": tasks, "last_interest_date": self.last_interest_date}
+            with open(self.data_file, "wb") as f: pickle.dump(data, f)
+        except: pass
+
+    def sync_consume_list(self):
+        self.consume_list.clear()
+        for k in self.time_bank.keys(): self.consume_list.addItem(k)
+
+    def update_all_ui(self):
+        self.points_label.setText(f"💰 当前总积分: {round(self.total_points, 2)}")
+        txt = [f"{k}: {v//60}分" for k, v in self.time_bank.items() if v > 0]
+        self.bank_display.setText("余额: " + (" | ".join(txt) if txt else "空"))
 
     def on_timer_tick(self):
         it = self.task_list.currentItem()
         if it:
             tk = it.data(Qt.UserRole)
-            if not tk.is_completed and tk.task_type != "签到":
-                tk.elapsed_seconds += 1; m, s = divmod(tk.elapsed_seconds, 60)
-                self.label_task_time.setText(f"用时: {m:02d}:{s:02d}")
+            if not tk.is_completed:
+                tk.elapsed_seconds += 1
+                m, s = divmod(tk.elapsed_seconds, 60)
+                self.label_task_time.setText(f"计时: {m:02d}:{s:02d}")
 
-    def manual_record(self):
-        it = self.task_list.currentItem()
-        if it: m, ok = QInputDialog.getInt(self, "补录", "分钟:", 20, 1, 600); it.data(Qt.UserRole).elapsed_seconds = m * 60; self.save_data()
-
-    def update_all_ui(self):
-        self.points_label.setText(f"💰 当前总积分: {self.total_points}")
-        txt = [f"{k}: {v//60}min" for k, v in self.time_bank.items() if v > 0]
-        self.bank_display.setText("银行余额: " + (" | ".join(txt) if txt else "空"))
+    def toggle_task_timer(self):
+        if self.main_timer.isActive(): self.main_timer.stop()
+        else: self.main_timer.start(1000)
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     window = LearningApp(); window.show()
     sys.exit(app.exec())
-
