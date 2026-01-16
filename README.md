@@ -1,48 +1,85 @@
-# Study-incentive-Assistant
-这是一个基于 Python和 PySide6 开发的桌面实用程序，旨在通过“积分激励”系统提高学习效率。
-# 学习积分助手 (Study Incentive Assistant) 🚀
+学习积分助手 (Study Incentive Assistant) 🚀
+简体中文 | English
 
-[简体中文](#-项目简介) | [English](#-introduction)
+🇨🇳 项目简介
+这是一个基于 Python 开发的全平台桌面与移动实用程序。它通过“积分经济学”逻辑，将学习任务转化为可量化的收益，并引入金融复利概念，旨在彻底解决学习拖延症。
 
----
+📸 界面预览 (Preview)
+✨ 核心功能
+四分区任务架构：精准分类“一次性任务、常规任务、定时签到、已完成”，任务流转逻辑清晰。
 
-## 🇨🇳 项目简介
-这是一个基于 **Python** 和 **PySide6 (Qt for Python)** 开发的桌面实用程序，旨在通过“积分激励”系统提高学习效率。
+金融激励系统：
 
-## 📸 界面预览 (Preview)
-![Learning App Preview](界面预览preview.png)
+0.1% 复利结息：账户余额每日自动结算利息，鼓励长线积分储蓄。
 
-### ✨ 核心功能
-* **多类型任务管理**：支持一次性任务、常规任务和限时签到任务。
-* **积分经济系统**：通过完成学习任务赚取积分，用于兑换“娱乐时长”或实物奖励。
-* **自动存档**：使用 `pickle` 实现本地数据序列化，确保学习记录不丢失。
-* **可视化统计**：支持按月份查询学习成果和积分收支明细。
+时长商店：支持积分购买娱乐时长，内置消费倒计时辅助自我管理。
 
-### 🛠️ 技术栈
-* **语言**: Python 3.x
-* **GUI 框架**: PySide6 (Qt 6)
-* **数据持久化**: Pickle (Object Serialization)
+全平台支持：
 
----
+桌面端 (PySide6)：功能全开，支持右键管理、月度收益详细统计。
 
-## 🇺🇸 Introduction
-A professional desktop application built with **Python** and **PySide6**, designed to boost productivity through a gamified "Point Incentive" system.
+手机端 (Kivy/Android)：支持随时随地打卡，数据同步便捷（注：需手动同步数据文件）。
 
-### ✨ Key Features
-* **Task Management**: Supports One-time, Routine, and Timed Check-in tasks.
-* **Gamification**: Earn points through study sessions to purchase "Entertainment Time" or rewards.
-* **Auto-Save**: Implemented local data persistence using `pickle` for reliable data storage.
-* **Statistics**: Monthly tracking of study achievements and point balance history.
+可视化统计：支持按月份精准查询任务净收益，红色高亮支出明细。
 
-### 🛠️ Tech Stack
-* **Language**: Python 3.x
-* **GUI Framework**: PySide6 (Qt 6)
-* **Persistence**: Pickle (Serialization)
+🛠️ 技术栈
+GUI 框架:
 
----
+Desktop: PySide6 (Qt 6)
 
-## 🚀 如何运行 (How to Run)
-1. 安装依赖 (Install dependencies):
-   `pip install PySide6`
-2. 运行程序 (Run app):
-   `python main.py`
+Mobile: Kivy (Cross-platform UI)
+
+数据持久化: Pickle (二进制序列化，确保跨平台数据结构一致)
+
+核心算法: 动态复利结算、任务分拣模糊匹配算法。
+
+🇺🇸 Introduction
+A cross-platform productivity ecosystem built with Python, designed to gamify learning through a sophisticated "Point Economics" and "Compound Interest" system.
+
+✨ Key Features
+Four-Quadrant Management: Categorized sections for One-time, Routine, Sign-in, and Completed tasks.
+
+Economic Incentives:
+
+0.1% Compound Interest: Daily interest credited automatically to reward long-term point saving.
+
+Time Store: Purchase entertainment duration with points, featuring an integrated countdown timer.
+
+Multi-Platform Support:
+
+Desktop (PySide6): Full-featured version with right-click menus and detailed statistics.
+
+Mobile (Kivy/Android): Optimized for on-the-go check-ins and task tracking.
+
+Advanced Analytics: Monthly gain tracking that isolates "Task Profit" from other expenditures.
+
+🛠️ Tech Stack
+Frameworks:
+
+Desktop: PySide6 (Qt 6)
+
+Mobile: Kivy
+
+Persistence: Pickle (Binary serialization for cross-platform consistency)
+
+Algorithms: Dynamic interest calculation & fuzzy logic for task sorting.
+
+🚀 如何运行 (How to Run)
+💻 桌面端 (Desktop)
+安装依赖: pip install PySide6
+
+运行程序: python main.py
+
+📱 手机端 (Mobile)
+确保安装了 Kivy 环境。
+
+编译为 APK (使用 Buildozer) 或在 Kivy Launcher 中运行。
+
+将 learning_data.dat 放入对应目录即可同步数据。
+
+💡 提示 / Tip
+程序会自动在目录下生成 learning_data.dat 用于保存数据。桌面端和手机端共用同一种数据格式。 The app uses learning_data.dat for storage. The data format is consistent across both Desktop and Mobile versions.
+
+
+💡 提示 / Tip
+程序会自动在目录下生成 learning_data.dat 用于保存数据。桌面端和手机端共用同一种数据格式。 The app uses learning_data.dat for storage. The data format is consistent across both Desktop and Mobile versions.
