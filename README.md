@@ -13,7 +13,8 @@
 
 ### 📸 界面预览  (Preview)
 <img width="1715" height="1313" alt="image" src="https://github.com/user-attachments/assets/18620dcd-db32-466c-a996-9ec510ec6a30" />
-<img width="1734" height="1322" alt="image" src="https://github.com/user-attachments/assets/09fa159c-67e4-484c-afcf-0c171d23e290" />
+<img width="1471" height="1197" alt="image" src="https://github.com/user-attachments/assets/4fb5f53d-64b9-4795-a891-5fe0d1e643ac" />
+
 
 
 ### ✨ 核心特性
